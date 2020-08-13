@@ -20,7 +20,7 @@ class SquareWidgets(pyLascaWidgets.PyLascaWidgets):
         self.sigmaText = self.createTextFloat(val=5.0, minVal=0.1, maxVal=20.0, stepSize=0.1, desc="sigma")
         self.sigmaSlider = self.createSliderFloat(val=5.0, minVal=0.1, maxVal=20.0, stepSize=0.1, desc="sigma")
         self.sigmaLink = self.createLink(self.sigmaText, self.sigmaSlider)
-        self.linekSelector = self.createSelector(opt = [-1],val = -1, rows=1, desc = 'Select')
+        self.vertexSelector = self.createSelector(opt = [-1],val = -1, rows=1, desc = 'Select')
         self.deleteButton = self.createButton(desc = 'delete')
         self.saveButton = self.createButton(desc = 'save')
     

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import cv2 as cv
 from skimage.morphology import skeletonize
+from sklearn.cluster import DBSCAN
 from matplotlib import pyplot as plt
 
 class SquareDetector(object):
@@ -198,7 +199,7 @@ class SquareDetector(object):
         self._lines = cv.HoughLines(self.image_skeleton,1,np.pi/180,minLineLength,maxLineGap)
                 
         
-    def drawLines(self):
+    def drawCompleteLines(self):
         image = cv.cvtColor(self.sharpen(self.image_raw), cv.COLOR_BGR2RGB)
         for rho,theta in self.lines[:,0]:
             a = np.cos(theta)
@@ -217,7 +218,7 @@ class SquareDetector(object):
         plt.title(caption)
         plt.show()
         
-    def drawLine(self, idx: int):
+    def drawSingleLine(self, idx: int):
         image = cv.cvtColor(self.sharpen(self.image_raw), cv.COLOR_BGR2RGB)
         if(idx < len(self.lines)):
             rho,theta = self.lines[idx,0]
@@ -237,10 +238,25 @@ class SquareDetector(object):
         plt.title(caption)
         plt.show()
         
-    def deleteLine(self, idx: int):
-        if(idx < len(self.lines)):
-            self._lines = np.delete(self._lines, (idx), axis=0)
+    def drawLines(self, index = -1):
+        if (index == -1):
+            self.drawCompleteLines()
+        else:
+            self.drawSingleLine(index)
         
+    def deleteLine(self, index: int):
+        if(index < len(self.lines)):
+            self._lines = np.delete(self._lines, (index), axis=0)
+            
+    def countLines(self):
+        return len(self.lines)
+        
+    def lineArray(self):
+        la = [-1]
+        for i in range(0, self.countLines(), 1):
+            la = np.append(la, i)
+        return la
+    
     def detectVertexes(self):
         pts = []
         for i in range(self.lines.shape[0]):
@@ -272,24 +288,50 @@ class SquareDetector(object):
       
         pts = np.array(pts)
         
-        # Define criteria = ( type, max_iter = 10 , epsilon = 1.0 )
-        criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        
-        # Set flags (Just to avoid line break in the code)
-        flags = cv.KMEANS_RANDOM_CENTERS
-        
-        # Apply KMeans
-        # The convex hull points need to be float32
+# =============================================================================
+#         # Define criteria = ( type, max_iter = 10 , epsilon = 1.0 )
+#         criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+#         
+#         # Set flags (Just to avoid line break in the code)
+#         flags = cv.KMEANS_RANDOM_CENTERS
+#         
+#         # Apply KMeans
+#         # The convex hull points need to be float32
+# =============================================================================
         z = pts.copy().astype(np.float32)
-        compactness,labels,centers = cv.kmeans(z,4,None,criteria,10,flags)
+        dbscan = DBSCAN(eps = 10.0, min_samples = 3)
+        dbscan.fit(z)
+        max_cl = max(dbscan.labels_)
+        centers = np.zeros([max_cl+1,2])
+        for i in range(max_cl+1):
+            centers[i,0] = np.mean(z[dbscan.labels_ == i,0])
+            centers[i,1] = np.mean(z[dbscan.labels_ == i,1])
+        self._vertexes = centers
+# =============================================================================
+#         compactness,labels,centers = cv.kmeans(z,4,None,criteria,10,flags)
+#         print(centers)
+#         
+#         self._vertexes = centers[:,None] # We need to convert to a 3D numpy array with a singleton 2nd dimension
+# =============================================================================
+
+    def deleteVertex(self, index: int):
+        if(index < np.shape(self.vertexes)[0]):
+            self._vertexes = np.delete(self._vertexes, (index), axis=0)
+            
+    def countVertexes(self):
+        return (np.shape(self.vertexes)[0])
         
-        self._vertexes = centers[:,None] # We need to convert to a 3D numpy array with a singleton 2nd dimension
-        
-    def drawVertexes(self):
+    def vertexArray(self):
+        la = [-1]
+        for i in range(0, self.countVertexes(), 1):
+            la = np.append(la, i)
+        return la
+
+    def drawCompleteVertexes(self):
         image = cv.cvtColor(self.sharpen(self.image_raw), cv.COLOR_BGR2RGB)
         for i in range(len(self.vertexes)):
-            x = self.vertexes[i,0,0]
-            y = self.vertexes[i,0,1]
+            x = int(self.vertexes[i,0])
+            y = int(self.vertexes[i,1])
             cv.circle(image, center = (x,y), radius = 3, color = [255,0,0], thickness=3)
             
         caption = str("Vertexes:")
@@ -298,18 +340,38 @@ class SquareDetector(object):
         plt.title(caption)
         plt.show()
         
+    def drawSingleVertex(self, index: int):
+        image = cv.cvtColor(self.sharpen(self.image_raw), cv.COLOR_BGR2RGB)
+        if (index < self.countVertexes()):
+            x = int(self.vertexes[index,0])
+            y = int(self.vertexes[index,1])
+            cv.circle(image, center = (x,y), radius = 3, color = [255,0,0], thickness=3)
+            
+        caption = str("Vertexes:")
+        plt.imshow(image)
+        plt.xticks([]), plt.yticks([])
+        plt.title(caption)
+        plt.show()
+        
+    def drawVertexes(self, index = -1):
+        if (index == -1):
+            self.drawCompleteVertexes()
+        else:
+            self.drawSingleVertex(index)
+        
+        
     def detectLandmarks(self):
-        if len(self.vertexes) == 4:
-            x_c = np.sum(self.vertexes[:,0,0])/4.0
-            y_c = np.sum(self.vertexes[:,0,1])/4.0
-            dx = self.vertexes[:,0,0] - x_c
-            dy = self.vertexes[:,0,1] - y_c
+        if np.shape(self.vertexes)[0] == 4:
+            x_c = np.sum(self.vertexes[:,0])/4.0
+            y_c = np.sum(self.vertexes[:,1])/4.0
+            dx = self.vertexes[:,0] - x_c
+            dy = self.vertexes[:,1] - y_c
             alpha = np.arctan2(dx, dy) * 180 / np.pi
             alpha[alpha < 0] = alpha[alpha < 0] + 360
-            lm_df = pd.DataFrame({"x_pxl": self.vertexes[:,0,0],
-                                  "y_pxl": self.vertexes[:,0,1],
-                                  "x_mm": self.vertexes[:,0,0] * self.pxlSize,
-                                  "y_mm": self.vertexes[:,0,1] * self.pxlSize,
+            lm_df = pd.DataFrame({"x_pxl": self.vertexes[:,0],
+                                  "y_pxl": self.vertexes[:,1],
+                                  "x_mm": self.vertexes[:,0] * self.pxlSize,
+                                  "y_mm": self.vertexes[:,1] * self.pxlSize,
                                   "alpha": alpha})
             lm_df.sort_values(by="alpha", ascending = True, inplace=True)
             self._landmarks = lm_df.copy()

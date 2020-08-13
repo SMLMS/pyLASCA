@@ -168,7 +168,7 @@ class SigmaDetector(object):
         
     def gui(self):
         max_thresh = 200
-        thresh = 50 # initial threshold
+        thresh = 200 # initial threshold
         source_window = 'Source'
         cv.namedWindow(source_window)
         cv.imshow(source_window, self.image)
