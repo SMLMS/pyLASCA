@@ -16,6 +16,7 @@ from scipy.optimize import brute
 from PIL import Image, ImageDraw
 
 
+from scipy.spatial import distance
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import mean_squared_error, normalized_root_mse, peak_signal_noise_ratio
 import math
@@ -113,8 +114,8 @@ class RoiContour(object):
         # clear array for convex hull points
         # =============================================================================
         if not(len(contours) < 1):
-            #self._contour = cv.convexHull(contours[-1], False)
-            self._contour = contours[-1]
+            self._contour = cv.convexHull(contours[-1], False)
+            #self._contour = contours[-1]
         else:
             self._contour = (np.nan,)
             
@@ -162,13 +163,15 @@ class Loss(object):
         self._roi_usr = RoiContour
         self._roi_thr = RoiContour
         self._thr_abs = int()
-        self._mse_value = float()
-        self._nrmse_value = float()
-        self._pnsr_value = float()
-        self._ssim_value = float()
-        self._agreement_value = float()
+        self._mse_metric = float()
+        self._nrmse_metric = float()
+        self._pnsr_metric = float()
+        self._ssim_metric = float()
+        self._agreement_metric = float()
+        self._overlap_metric = float()
+        self._distance_metric = float()
         self._loss_value = float()
-        self._df_fit = pd.DataFrame
+        self._df_metrics = pd.DataFrame
         self.initLossWithRoi(obj)
         
     def __str__(self):
@@ -192,32 +195,40 @@ class Loss(object):
         return(self._thr_abs)
     
     @property
-    def mse_value(self)  -> float:
-        return(self._mse_value)
+    def mse_metric(self)  -> float:
+        return(self._mse_metric)
     
     @property
-    def nrmse_value(self)  -> float:
-        return(self._nrmse_value)
+    def nrmse_metric(self)  -> float:
+        return(self._nrmse_metric)
     
     @property
-    def pnsr_value(self)  -> float:
-        return(self._pnsr_value)
+    def pnsr_metric(self)  -> float:
+        return(self._pnsr_metric)
     
     @property
-    def ssim_value(self)  -> float:
-        return(self._ssim_value)
+    def ssim_metric(self)  -> float:
+        return(self._ssim_metric)
     
     @property
-    def agreement_value(self) -> float:
-        return(self._agreement_value)
+    def agreement_metric(self) -> float:
+        return(self._agreement_metric)
+    
+    @property
+    def overlap_metric(self) -> float:
+        return(self._overlap_metric)
+    
+    @property
+    def distance_metric(self) -> float:
+        return(self._distance_metric)
     
     @property
     def loss_value(self)  -> float:
         return(self._loss_value)
     
     @property
-    def df_fit(self)  -> pd.DataFrame:
-        return(self._df_fit.copy())
+    def df_metrics(self)  -> pd.DataFrame:
+        return(self._df_metrics.copy())
     
     def initLossWithRoi(self, obj:RoiContour):
         self._roi_usr = cp.deepcopy(obj)
@@ -234,53 +245,65 @@ class Loss(object):
             self._roi_thr.detectContoursByThr()
             self._roi_thr.analyze_roi()
         except:
-            self._mse_value = 0
-            self._nrmse_value = 0
-            self._pnsr_value = math.inf
-            self._ssim_value = math.inf
-            self._agreement_value = 0
+            self._mse_metric = 0
+            self._nrmse_metric = 0
+            self._pnsr_metric = math.inf
+            self._ssim_metric = math.inf
+            self._agreement_metric = 0
+            self._overlap_metric = math.inf
             self._loss_value = math.inf
             if(self._keep_track):
-                self._df_fit = self._df_fit.append({'thr': thr[0],
-                                                     'mse': self.mse_value,
-                                                     'nrmse': self.nrmse_value,
-                                                     'pnsr': self.pnsr_value,
-                                                     'ssim': self.ssim_value,
-                                                     'agreement': self.agreement_value,
-                                                     'loss': self.loss_value},
-                                                    ignore_index=True)
-            
+                self._df_metrics = self._df_metrics.append({'thr': thr[0],
+                                                            'mse': self.mse_metric,
+                                                            'nrmse': self.nrmse_metric,
+                                                            'pnsr': self.pnsr_metric,
+                                                            'ssim': self.ssim_metric,
+                                                            'agreement': self.agreement_metric,
+                                                            'overlap': self.overlap_metric,
+                                                            'distance': self.distance_metric,
+                                                            'loss': self.loss_value},
+                                                           ignore_index=True)
             return(self.loss_value)
             
         
         ###################
         # compare results #
         ###################
-        im_thr = self._roi_thr.image_bin
-        im_usr = self._roi_usr.image_bin
+        im_thr = self._roi_thr.image_roi
+        im_usr = self._roi_usr.image_roi
+        centroid_usr = self._roi_usr.centroid_roi
+        centroid_thr = self._roi_thr.centroid_roi
         
-        self._mse_value = mean_squared_error(im_usr, im_thr)
-        self._nrmse_value = normalized_root_mse(im_usr, im_thr, normalization = 'euclidean')
-        self._pnsr_value = peak_signal_noise_ratio(im_usr, im_thr, data_range = 2**1-1)   
-        self._ssim_value = ssim(im_usr, im_thr, data_range= 2**1-1)
-        self._agreement_value = np.sum(im_usr == im_thr) / im_usr.size
+        
+        self._mse_metric = mean_squared_error(im_usr, im_thr)
+        self._nrmse_metric = normalized_root_mse(im_usr, im_thr, normalization = 'euclidean')
+        self._pnsr_metric = peak_signal_noise_ratio(im_usr, im_thr, data_range = 2**1-1)   
+        self._ssim_metric = ssim(im_usr, im_thr, data_range= 2**1-1)
+        self._agreement_metric = np.sum(im_usr == im_thr) / im_usr.size
+        area_overlap = np.sum(np.multiply(self._roi_usr.image_bin, self._roi_thr.image_bin))
+        area_usr = np.pi * self._roi_usr.area_r**2
+        area_thr = np.pi * self._roi_thr.area_r**2
+        self._overlap_metric = (area_usr +area_thr - 2 * area_overlap)/(area_usr +area_thr)
+        self._distance_metric = 1.0 - ( 1.0 / ( 1.0 + distance.euclidean(centroid_usr, centroid_thr)))
         ##################
         # claculate loss #
         ##################
-        self._loss_value = self.nrmse_value / (self.pnsr_value * self.ssim_value)
+        self._loss_value = (self.nrmse_metric * self.overlap_metric) / (self.ssim_metric * self.agreement_metric)
 
         ##############
         # keep track #
         ##############
         if(self._keep_track):
-            self._df_fit = self._df_fit.append({'thr': thr[0],
-                                                 'mse': self.mse_value,
-                                                 'nrmse': self.nrmse_value,
-                                                 'pnsr': self.pnsr_value,
-                                                 'ssim': self.ssim_value,
-                                                 'agreement': self.agreement_value,
-                                                 'loss': self.loss_value},
-                                                ignore_index=True)
+            self._df_metrics = self._df_metrics.append({'thr': thr[0],
+                                                        'mse': self.mse_metric,
+                                                        'nrmse': self.nrmse_metric,
+                                                        'pnsr': self.pnsr_metric,
+                                                        'ssim': self.ssim_metric,
+                                                        'agreement': self.agreement_metric,
+                                                        'overlap': self.overlap_metric,
+                                                        'distance': self.distance_metric,
+                                                        'loss': self.loss_value},
+                                                       ignore_index=True)
         return(self.loss_value)
     
     def minimize_brute(self):
@@ -294,13 +317,15 @@ class Loss(object):
         # define fit function #
         #######################
         self._keep_track = True
-        self._df_fit = pd.DataFrame({'thr': [math.nan],
-                                     'mse': [math.nan],
-                                     'nrmse': [math.nan],
-                                     'pnsr': [math.nan],
-                                     'ssim': [math.nan],
-                                     'agreement': [math.nan],
-                                     'loss': [math.nan]})
+        self._df_metrics = pd.DataFrame({'thr': [math.nan],
+                                         'mse': [math.nan],
+                                         'nrmse': [math.nan],
+                                         'pnsr': [math.nan],
+                                         'ssim': [math.nan],
+                                         'agreement': [math.nan],
+                                         'overlap': [math.nan],
+                                         'distance': [math.nan],
+                                         'loss': [math.nan]})
         result = brute(func = self.loss_function,
                        ranges = (slice(min_value, max_value, 1),)
                        )
@@ -309,11 +334,11 @@ class Loss(object):
         # log results #
         ###############
         self._keep_track = False
-        self._df_fit = self._df_fit.sort_values(by='thr', ignore_index = True)
+        self._df_metrics = self._df_metrics.sort_values(by='thr', ignore_index = True)
         self.loss_function(thr = result)
     
     def plot_minimization_process(self):
-        self._df_fit.plot(x="thr", y="loss", kind = "line")
+        self._df_metrics.plot(x="thr", y="loss", kind = "line")
         plt.axvline(x= self.thr_abs, linestyle='dashed', label = 'threshold')
         plt.show()
         plt.close()
@@ -338,10 +363,10 @@ class Loss(object):
     
 
 def main():
-    imgName = "/Users/malkusch/PowerFolders/LaSCA/rawData/SCTCAPS01/SCTCAPS01_1.45_frame0.tiff"
+    imgName = "/Users/malkusch/PowerFolders/LaSCA/rawData/SCTCAPS01/SCTCAPS01_1.30_frame0.tiff"
     img1 = cv.imread(imgName, cv.IMREAD_ANYDEPTH)
     
-    coordName = "/Users/malkusch/PowerFolders/LaSCA/mechanic/SCTCAPS 01/Tag 1/SCTCAPS 01 #1 45min (Colour)_transformed_200612.csv"
+    coordName = "/Users/malkusch/PowerFolders/LaSCA/mechanic/SCTCAPS 01/Tag 1/SCTCAPS 01 #1 30min (Colour)_transformed_200612.csv"
     df_coord = pd.read_csv(coordName)
     #df_coord = df_coord[df_coord["effect"] == "sec_hyperalgesia"]
     df_coord = df_coord[df_coord["effect"] == "allodynia"]
@@ -364,6 +389,36 @@ def main():
     loss.minimize_brute()
     loss.plot_minimization_process()
     loss.plot_result()
+    
+    loss.df_metrics.plot(x="thr", y="nrmse", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
+    
+    loss.df_metrics.plot(x="thr", y="pnsr", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
+    
+    loss.df_metrics.plot(x="thr", y="ssim", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
+    
+    loss.df_metrics.plot(x="thr", y="agreement", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
+    
+    loss.df_metrics.plot(x="thr", y="overlap", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
+    
+    loss.df_metrics.plot(x="thr", y="distance", kind = "line")
+    plt.axvline(x= loss.thr_abs, linestyle='dashed', label = 'threshold')
+    plt.show()
+    plt.close()
 
 
     

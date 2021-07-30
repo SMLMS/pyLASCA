@@ -37,9 +37,7 @@ class DeadPxl(object):
         Returns:
             Compound string comprising the class' instance variables'
         """
-        string = str("\nDeadPxl information\n"%
-                     ()
-                     )
+        string = str("\nDeadPxl information\n")
         return(string)
                
     def __del__(self):
