@@ -144,27 +144,36 @@ class Bayes_decision_rules(object):
     def positive_boundary(self, omega_1, mu_1, sigma_1, omega_2, mu_2, sigma_2):
         c_1 = np.log(omega_1) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma_1**2)))
         c_2 = np.log(omega_2) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma_2**2)))
-        x_1 = (-2.0 * (c_1 - c_2) * (sigma_1**2 - sigma_2**2)) + ((mu_1 - mu_2)**2)
+        x_1 = np.abs(-2.0 * (c_1 - c_2) * (sigma_1**2 - sigma_2**2)) + ((mu_1 - mu_2)**2)
         x_2 = mu_2 * sigma_1**2
         x_3 = mu_1 * sigma_2**2
         x_4 = sigma_1**2 - sigma_2**2
-        x = (x_2 - x_3 + np.sqrt(sigma_1**2 * sigma_2**2 * x_1)) / (x_4)
+        if(sigma_1 == sigma_2):
+            x = np.nan
+        else:
+            x = (x_2 - x_3 + np.sqrt(sigma_1**2 * sigma_2**2 * x_1)) / (x_4)
         return(x)
         
     def negative_boundary(self, omega_1, mu_1, sigma_1, omega_2, mu_2, sigma_2):
         c_1 = np.log(omega_1) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma_1**2)))
         c_2 = np.log(omega_2) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma_2**2)))
-        x_1 = (-2.0 * (c_1 - c_2) * (sigma_1**2 - sigma_2**2)) + ((mu_1 - mu_2)**2)
+        x_1 = np.abs(-2.0 * (c_1 - c_2) * (sigma_1**2 - sigma_2**2)) + ((mu_1 - mu_2)**2)
         x_2 = mu_2 * sigma_1**2
         x_3 = mu_1 * sigma_2**2
         x_4 = sigma_1**2 - sigma_2**2
-        x = (x_2 - x_3 - np.sqrt(sigma_1**2 * sigma_2**2 * x_1)) / (x_4)
+        if(sigma_1 == sigma_2):
+            x = np.nan
+        else:
+            x = (x_2 - x_3 - np.sqrt(sigma_1**2 * sigma_2**2 * x_1)) / (x_4)
         return(x)
         
     def equal_sd_boundary(self, omega_1, mu_1, omega_2, mu_2, sigma):
         c_1 = np.log(omega_1) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma**2)))
         c_2 = np.log(omega_2) + np.log(1.0 / np.sqrt(2 * np.pi * (sigma**2)))
-        x = ((2.0 * sigma**2 * (c_2 - c_1)) + (mu_1**2 - mu_2**2)) / (2.0* (mu_1 - mu_2))
+        if(mu_1 == mu_2):
+            x = np.nan
+        else:
+            x = ((2.0 * sigma**2 * (c_2 - c_1)) + (mu_1**2 - mu_2**2)) / (2.0* (mu_1 - mu_2))
         return(x)
     
     def equal_sd_omega_boundary(self, mu_1, mu_2):
